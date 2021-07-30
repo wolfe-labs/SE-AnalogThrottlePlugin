@@ -37,31 +37,21 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <AdditionalFiles Include="MDK\whitelist.cache">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </AdditionalFiles>
     <None Include="packages.config" />
   </ItemGroup>
-  <Import Project="MDK/MDK.options.props" />
-  <Import Project="MDK/MDK.paths.props" Condition="exists('MDK/MDK.paths.props')" />
   <ItemGroup>
     <Compile Include="AnalogThrottleSession.cs" />
-    <None Include="MDK\Bootstrapper.cs" />
-    <AdditionalFiles Include="MDK\MDK.options.props">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </AdditionalFiles>
-    <AdditionalFiles Include="MDK\MDK.paths.props">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </AdditionalFiles>
     <Compile Include="Controller.cs" />
     <Compile Include="DebugHelper.cs" />
     <Compile Include="Plugin.cs" />
-    <Compile Include="Program.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>..\packages\Newtonsoft.Json.13.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
+    </Reference>
+    <Reference Include="Sandbox.Common">
+      <HintPath>..\..\..\..\Steam\steamapps\common\SpaceEngineers\Bin64\Sandbox.Common.dll</HintPath>
     </Reference>
     <Reference Include="SharpDX, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
       <HintPath>..\packages\SharpDX.4.2.0\lib\net45\SharpDX.dll</HintPath>
@@ -71,11 +61,13 @@
       <HintPath>..\packages\SharpDX.DirectInput.4.2.0\lib\net45\SharpDX.DirectInput.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="VRage">
+      <HintPath>..\..\..\..\Steam\steamapps\common\SpaceEngineers\Bin64\VRage.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Game">
+      <HintPath>..\..\..\..\Steam\steamapps\common\SpaceEngineers\Bin64\VRage.Game.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <Import Project="..\AnalogThrottleScriptingAPI\AnalogThrottleScriptingAPI.projitems" Label="Shared" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Target Name="AfterBuild">
-    <Copy SourceFiles="MDK\MDK.options.props" DestinationFolder="$(TargetDir)\MDK" />
-    <Copy SourceFiles="MDK\MDK.paths.props" DestinationFolder="$(TargetDir)\MDK" />
-  </Target>
 </Project>
