@@ -1,6 +1,4 @@
-﻿#pragma warning disable ProhibitedMemberRule // Ignores whitelist errors
-
-using VRage.Plugins;
+﻿using VRage.Plugins;
 
 namespace WolfeLabs.AnalogThrottle
 {

@@ -1,6 +1,4 @@
-﻿#pragma warning disable ProhibitedMemberRule // Ignores whitelist errors
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using SharpDX.DirectInput;
 

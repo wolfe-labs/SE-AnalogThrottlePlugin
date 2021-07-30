@@ -1,6 +1,4 @@
-﻿#pragma warning disable ProhibitedMemberRule // Ignores whitelist errors
-
-using IngameScript.WolfeLabs.AnalogThrottleAPI;
+﻿using IngameScript.WolfeLabs.AnalogThrottleAPI;
 using Sandbox.ModAPI;
 using SharpDX.DirectInput;
 using System;
