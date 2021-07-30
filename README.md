@@ -11,6 +11,8 @@ The idea behind that decision is both simplicity and the goal of providing ship 
 
 Please check the [Scripting API](https://github.com/wolfe-labs/SE-AnalogThrottleAPIn) for more details.
 
+Make sure your Programmable Block has the tag `[AnalogThrottle]` on it, otherwise the plugin **will not trigger it**
+
 ## How it works
 
 Being a plugin instead of a mod or script, it has way more access to things outside of what the game engine exposes and also allows for usage anywhere, since it's only client-side.
