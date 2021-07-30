@@ -1,0 +1,7 @@
+﻿[*.cs]
+
+# ProhibitedMemberRule: Prohibited Type Or Member
+dotnet_diagnostic.ProhibitedMemberRule.severity = none
+
+# Default severity for analyzer diagnostics with category 'Whitelist'
+dotnet_analyzer_diagnostic.category-Whitelist.severity = none
