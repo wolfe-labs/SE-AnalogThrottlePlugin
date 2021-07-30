@@ -2,19 +2,24 @@
 
 using System;
 using System.IO;
-using Newtonsoft.Json;
 
 namespace WolfeLabs.AnalogThrottle
 {
     class DebugHelper
     {
-        private static StreamWriter LogFile = new StreamWriter("F:\\tmp\\AnalogThrottle.log");
+        public static readonly string LogFile = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetAssembly(typeof(Plugin)).Location), "AnalogThrottle.log");
+
+#if DEBUG
+        private static readonly StreamWriter LogWriter = new StreamWriter(DebugHelper.LogFile);
+#endif
         public static void Log (object data)
         {
-            string line = $"[{ System.DateTime.Now.ToString("u") }] { JsonConvert.SerializeObject(data) }";
+#if DEBUG
+            string line = $"[{ System.DateTime.Now.ToString("u") }] { Newtonsoft.Json.JsonConvert.SerializeObject(data) }";
             Console.WriteLine(line);
-            LogFile.WriteLine(line);
-            LogFile.Flush();
+            LogWriter.WriteLine(line);
+            LogWriter.Flush();
+#endif
         }
     }
 }
