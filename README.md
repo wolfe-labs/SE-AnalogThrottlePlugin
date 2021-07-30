@@ -9,7 +9,7 @@ This plugin ***does not*** provide any hooks into the game's movement system and
 
 The idea behind that decision is both simplicity and the goal of providing ship builders extra flexibility on controlling their builds, like using the analog axis to control cranes, pistons, rotors, etc.
 
-Please check the [Scripting API](https://github.com/wolfe-labs/SE-AnalogThrottleAPIn) for more details.
+Please check the [Scripting API](https://github.com/wolfe-labs/SE-AnalogThrottleAPI) for more details.
 
 Make sure your Programmable Block has the tag `[AnalogThrottle]` on it, otherwise the plugin **will not trigger it**
 
