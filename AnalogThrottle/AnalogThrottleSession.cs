@@ -90,7 +90,7 @@ namespace WolfeLabs.AnalogThrottle
                     // Sends event if valid
                     if (null != blockAsPB && blockAsPB.CustomName.Contains("[AnalogThrottle]")) {
                         DebugHelper.Log($"Sending event to PB: { blockAsPB.CustomName }");
-                        blockAsPB.Run(message, Sandbox.ModAPI.Ingame.UpdateType.Terminal);
+                        blockAsPB.Run(message, Sandbox.ModAPI.Ingame.UpdateType.Mod);
                     }
                 }
             } catch (Exception e) {
