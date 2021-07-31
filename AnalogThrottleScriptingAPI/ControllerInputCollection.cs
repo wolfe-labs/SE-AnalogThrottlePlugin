@@ -6,7 +6,7 @@ namespace IngameScript.WolfeLabs.AnalogThrottleAPI
     public class ControllerInputCollection : List<ControllerInput>
     {
         // The character separating each of the different input entries
-        private static char separator = '\n';
+        private static readonly char separator = '\n';
 
         /// <summary>
         /// Creates a collection from an Array of controller inputs
