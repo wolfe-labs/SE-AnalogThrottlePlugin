@@ -8,7 +8,7 @@ namespace WolfeLabs.AnalogThrottle
         public static readonly string LogFile = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetAssembly(typeof(Plugin)).Location), "AnalogThrottle.log");
 
 #if DEBUG
-        private static readonly StreamWriter LogWriter = new StreamWriter(DebugHelper.LogFile);
+        private static readonly StreamWriter LogWriter = new StreamWriter(DebugHelper.LogFile, true);
 #endif
         public static void Log (object data)
         {
