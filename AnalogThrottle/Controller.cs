@@ -4,7 +4,7 @@ using SharpDX.DirectInput;
 
 namespace WolfeLabs.AnalogThrottle
 {
-    class Controller
+    public class Controller
     {
         /// <summary>
         /// The event handler when an analog axis is changed (sliders, etc)
@@ -49,6 +49,9 @@ namespace WolfeLabs.AnalogThrottle
         /// </summary>
         public Joystick Joystick { get; private set; }
 
+        // The range of this specific input, to be remapped into a ushort later
+        private InputRange inputRange;
+
         // List of all axis
         private readonly DeviceObjectInstance[] Axis;
 
@@ -79,8 +82,10 @@ namespace WolfeLabs.AnalogThrottle
                 // Gets the proper object
                 DeviceObjectInstance axis = this.Axis[axisIndex];
 
-                // Sets the range limiter to fit an ushort
-                //this.Joystick.GetObjectPropertiesById(axis.ObjectId).Range = new InputRange(0, ushort.MaxValue);
+                // Sets the range limiter to fit an ushort later on
+                try {
+                    this.inputRange = this.Joystick.GetObjectPropertiesById(axis.ObjectId).Range;
+                } catch { }
             }
 
             // Starts the Joystick
@@ -106,8 +111,28 @@ namespace WolfeLabs.AnalogThrottle
             this.CompareAndEmitAnalog("RY", this.AxisPreviousState.RotationY, currentState.RotationY);
             this.CompareAndEmitAnalog("RZ", this.AxisPreviousState.RotationZ, currentState.RotationZ);
 
+            // Handles POV hats
+            for (int iPOV = 0; iPOV < currentState.PointOfViewControllers.Length; iPOV++) {
+                this.CompareAndEmitAnalog($"P{ iPOV }", this.AxisPreviousState.PointOfViewControllers[iPOV], currentState.PointOfViewControllers[iPOV]);
+            }
+
+            // Handles sliders
+            for (int iSlider = 0; iSlider < currentState.Sliders.Length; iSlider++) {
+                this.CompareAndEmitAnalog($"S{ iSlider }", this.AxisPreviousState.Sliders[iSlider], currentState.Sliders[iSlider]);
+            }
+
+            // Handles buttons
+            for (int iButton = 0; iButton < currentState.Buttons.Length; iButton++) {
+                this.CompareAndEmitDigital($"B{ iButton }", this.AxisPreviousState.Buttons[iButton], currentState.Buttons[iButton]);
+            }
+
             // Updates previous state so that only new changes trigger events
             this.AxisPreviousState = currentState;
+        }
+
+        private ushort NormalizeValue (int rawValue)
+        {
+            return (ushort)(((double)rawValue / (double)this.inputRange.Maximum) * (double)ushort.MaxValue);
         }
 
         private bool CompareAndEmitAnalog (string axisName, int oldValue, int newValue)
@@ -116,7 +141,24 @@ namespace WolfeLabs.AnalogThrottle
             if (oldValue != newValue) {
                 // Emits event (if any handler is present)
                 if (null != this.AnalogInput) {
-                    this.AnalogInput(this, new AnalogEventArgs { Axis = axisName, Value = (ushort)newValue });
+                    this.AnalogInput(this, new AnalogEventArgs { Axis = axisName, Value = this.NormalizeValue(newValue) });
+                }
+
+                // Indicates a difference was found
+                return true;
+            }
+
+            // Indicates no difference was found
+            return false;
+        }
+
+        private bool CompareAndEmitDigital (string axisName, bool oldValue, bool newValue)
+        {
+            // Does check for difference
+            if (oldValue != newValue) {
+                // Emits event (if any handler is present)
+                if (null != this.DigitalInput) {
+                    this.DigitalInput(this, new DigitalEventArgs { Axis = axisName, Value = newValue });
                 }
 
                 // Indicates a difference was found

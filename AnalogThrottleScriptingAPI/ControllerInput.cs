@@ -38,7 +38,7 @@ namespace IngameScript.WolfeLabs.AnalogThrottleAPI
         public bool DigitalValue { get; private set; }
 
         // This is the character separating each of the parts of each line
-        private static char separator = ':';
+        private static readonly char separator = ':';
 
         /// <summary>
         /// Parses a string containing the data from controller input into a script-friendly object
