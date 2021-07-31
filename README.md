@@ -13,6 +13,14 @@ Please check the [Scripting API](AnalogThrottleScriptingAPI/) for more details.
 
 Make sure your Programmable Block has the tag `[AnalogThrottle]` on it, otherwise the plugin **will not trigger it**
 
+## Does it work on multiplayer? Does it require anything installed on the server?
+
+The plugin is compatible with multiplayer and doesn't require anything installed on the server, with the only requirement being that the server allows you to create and use Programmable Blocks and scripts.
+
+Any processing regarding the raw input of your controllers is done client-side and converted to a common format that is then read by the script on the Programmable Block, which is running on the server. Read more below for a detailed view on how it works.
+
+**Note:** In non-local sessions (aka multiplayer) the plugin will automatically throttle the amount of updates sent to the server to around a third of the normal amount, so it doesn't overuse bandwidth or cause lag due to Programmable Block processing.
+
 ## How it works
 
 Being a plugin instead of a mod or script, it has way more access to things outside of what the game engine exposes and also allows for usage anywhere, since it's only client-side.
