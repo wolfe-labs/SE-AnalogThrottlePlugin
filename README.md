@@ -9,7 +9,7 @@ This plugin ***does not*** provide any hooks into the game's movement system and
 
 The idea behind that decision is both simplicity and the goal of providing ship builders extra flexibility on controlling their builds, like using the analog axis to control cranes, pistons, rotors, etc.
 
-Please check the [Scripting API](https://github.com/wolfe-labs/SE-AnalogThrottleAPI) for more details.
+Please check the [Scripting API](AnalogThrottleScriptingAPI/) for more details.
 
 Make sure your Programmable Block has the tag `[AnalogThrottle]` on it, otherwise the plugin **will not trigger it**
 
@@ -21,8 +21,8 @@ In the inner workings, the plugin uses SharpDX, a wrapper for DirectX, to access
 
 After new controller data is fetched, it is compared with the previous state and only the changes are then combined and sent to the Programmable Block. This ensures fewer calls to the script and potentially less performance issues.
 
-## Development and Build from source
+## Script Development
 
 To keep things as compatible and in sync as possible between the Plugin and Scripts, both use the same Scripting API. That API contains any shared classes along with methods to serialize and deserialize data.
 
-When developing or building this project from its source, please keep in mind you include the Scripting API submodule by using the cloning the repository using these two extra flags: `git clone --recurse-submodules --remote-submodules` as that will also download the latest version of the API for you and it will be included into the Visual Studio Solution. From there you can work normally as you normally would.
+The shared API is present on the [AnalogThrottleScriptingAPI](AnalogThrottleScriptingAPI/) directory of this project, along with instructions on how to use it on your scripts.
