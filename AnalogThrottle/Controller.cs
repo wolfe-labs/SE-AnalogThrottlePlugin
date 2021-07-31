@@ -4,7 +4,7 @@ using SharpDX.DirectInput;
 
 namespace WolfeLabs.AnalogThrottle
 {
-    class Controller
+    public class Controller
     {
         /// <summary>
         /// The event handler when an analog axis is changed (sliders, etc)

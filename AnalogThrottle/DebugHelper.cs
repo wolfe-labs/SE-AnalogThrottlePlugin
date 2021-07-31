@@ -3,7 +3,7 @@ using System.IO;
 
 namespace WolfeLabs.AnalogThrottle
 {
-    class DebugHelper
+    public class DebugHelper
     {
         public static readonly string LogFile = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetAssembly(typeof(Plugin)).Location), "AnalogThrottle.log");
 
