@@ -1,0 +1,12 @@
+﻿! TWCS Throttle
+@ X = ThrustLateral
+@ Y = ThrustVertical | Reverse
+@ Z = ThrustForward | Reverse
+@ RZ = Roll
+@ S0 = GyroPower
+
+! T.16000M
+@ X = Yaw
+@ Y = Pitch
+@ RZ = Roll
+@ B2 = ThrustBackward | Reverse
