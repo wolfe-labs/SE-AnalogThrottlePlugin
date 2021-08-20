@@ -1,4 +1,4 @@
-﻿using IngameScript.WolfeLabs.AnalogThrottleAPI;
+using IngameScript.WolfeLabs.AnalogThrottleAPI;
 using Sandbox.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
@@ -12,42 +12,74 @@ namespace IngameScript
     {
         // List of valid axis types
         private readonly string[] AXIS_TYPES = new string[] { "Normal", "Center", "Reverse" };
+
         private readonly string[] AXIS_DIRECTIONS = new string[] { "Normal", "Reverse" };
 
         // The minimum value to actuate an axis
-        private readonly float DELTA_MIN = 0.005f;
+        private float DEAD_ZONE = 0.05f;
+
+        // Input curve exponents
+        private readonly double INPUT_EXP_THRUST = 1.2;
+
+        private readonly double INPUT_EXP_GYRO = 1.8;
+        private readonly double INPUT_EXP_FLAT = 1;
 
         // This will contain ALL possible commands of this script
         private Dictionary<string, Action<ControllerInput, string[]>> availableCommands = new Dictionary<string, Action<ControllerInput, string[]>>();
 
         // This will provide a mapping of Controller-Axis to one of the script's Actions
         private Dictionary<string, Action<ControllerInput, string[]>> shipCommands = new Dictionary<string, Action<ControllerInput, string[]>>();
-        private Dictionary<string, string[]> shipCommandsOptions = new Dictionary<string, string[]>();
 
+        private Dictionary<string, string[]> shipCommandsOptions = new Dictionary<string, string[]>();
 
         // This will store Gyroscope information, including Matrices indicating how they are rotated to provide proper Pitch/Roll/Yaw values
         private List<IMyGyro> shipGyroscopes = new List<IMyGyro>();
+
         private Dictionary<long, Vector3I[]> shipGyroscopesTransforms = new Dictionary<long, Vector3I[]>();
 
         // This will store Thruster information
         private List<IMyThrust> shipThrusters = new List<IMyThrust>();
 
+        private List<IMyThrust> shipLiftThrusters = new List<IMyThrust>();
+
+        // Notes:
+        // Maximum effective thrust depends on atmospheric density for Ion and Atmospheric type thrusters
+        // Maximum mass depends on maximum effective thrust and current gravity
+        // Thrust and mass values must be recalculated periodically to keep up with environment and grid changes
+
+        // Effective gravity, default to 1G
+        private float gravity = 9.806f;
+
+        // Maximum mass that we can lift in current gravity and atmospheric density
+        private float maxShipMass = 0;
+
+        private float currentShipMass = 0;
+
+        // Minimum thrust necessary to float given current weight, gravity and atmospheric density
+        private float baselineLiftThrust = 0;
+        private float baselineDelta = 0;
+
+        // Maximum available lift thrust given current atmospheric density
+        private float availableLiftThrust = 0;
+
         // This will store the Main Cockpit
-        private IMyCockpit shipMainCockpit = null;
+        private IMyCockpit shipCockpit = null;
 
         // This is our grid's Main Direction
-        Vector3D shipMainOrientationForward;
-        Vector3D shipMainOrientationRight;
-        Vector3D shipMainOrientationUp;
+        private Vector3D shipMainOrientationForward;
 
-        private string GetCommandKey (string controller, string axis)
+        private Vector3D shipMainOrientationRight;
+        private Vector3D shipMainOrientationUp;
+
+        private string GetCommandKey(string controller, string axis)
         {
             return $"{ axis }.{ controller }";
         }
 
-        private float GetAxisValueByZero (float inputValue, string zero)
+        private float GetAxisValueByZero(float inputValue, string zero)
         {
-            switch (zero) {
+            switch (zero)
+            {
                 case "Center": return (2.0f * inputValue) - 1.0f;
                 case "Reverse": return 1.0f - inputValue;
                 case "Normal":
@@ -56,7 +88,7 @@ namespace IngameScript
             }
         }
 
-        private void InvokeCommandFromInput (ControllerInput input)
+        private void InvokeCommandFromInput(ControllerInput input)
         {
             // Gets command key first
             string commandKey = this.GetCommandKey(input.Source, input.Axis);
@@ -66,7 +98,7 @@ namespace IngameScript
                 this.shipCommands[commandKey](input, this.shipCommandsOptions[commandKey]);
         }
 
-        private string GetArg (string[] args, int position, string defaultOption, string[] validOptions = null)
+        private string GetArg(string[] args, int position, string defaultOption, string[] validOptions = null)
         {
             // Less than needed args
             if (args.Length <= position)
@@ -83,7 +115,7 @@ namespace IngameScript
             return value;
         }
 
-        private Vector3I[] GetLocalRotation (MatrixD blockWorldMatrix)
+        private Vector3I[] GetLocalRotation(MatrixD blockWorldMatrix)
         {
             // Temporary double-precision vectors, I really **wish** those were Vector3I instead but the WorldMatrix is a double-precision number. Oh well...
             Vector3D doubleForward = Vector3D.TransformNormal(this.shipMainOrientationForward, MatrixD.Transpose(blockWorldMatrix));
@@ -98,39 +130,75 @@ namespace IngameScript
             };
         }
 
-        private int GetVectorComponentSum (Vector3I vec)
+        private int GetVectorComponentSum(Vector3I vec)
         {
             return vec.X + vec.Y + vec.Z;
         }
 
-        private void Reload ()
+        private float PlotOnExpCurve(float input, float min, float max, double exp)
+        {
+            float factor = (float)Math.Pow(Math.Abs(input) / max, exp);
+            float scaled = min + ((max - min) * input / max * factor);
+
+            Echo($"orig: {input:F3}");
+            Echo($"exponent: {exp:F3}");
+            Echo($"factor: {factor:F3}");
+            Echo($"scaled: {scaled:F3}");
+            return (scaled);
+        }
+
+        private void UpdateThrustMass()
+        {
+            if (this.shipCockpit == null)
+            {
+                Echo("No cockpit detected. Set one as main.");
+                return;
+            }
+
+            // Update total effective lifting thrust
+            this.availableLiftThrust = 0;
+            foreach (IMyThrust thruster in this.shipLiftThrusters)
+            {
+                // Filter out disabled, broken, etc
+                if (thruster.IsWorking)
+                    this.availableLiftThrust += thruster.MaxEffectiveThrust;
+            }
+
+            this.currentShipMass = this.shipCockpit.CalculateShipMass().TotalMass;
+            this.gravity = (float)this.shipCockpit.GetNaturalGravity().Length();
+            if (this.gravity > 0)
+            {
+                this.baselineLiftThrust = this.currentShipMass * this.gravity;
+                this.baselineDelta = this.baselineLiftThrust / this.availableLiftThrust;
+                this.maxShipMass = this.availableLiftThrust / this.gravity;
+            }
+            else
+            {
+                this.baselineLiftThrust = 0;
+                this.baselineDelta = 0;
+                this.maxShipMass = 0;
+            }
+        }
+
+        private void Reload()
         {
             // Cleanup existing settings
             this.shipCommands.Clear();
             this.shipGyroscopes.Clear();
             this.shipThrusters.Clear();
+            this.shipLiftThrusters.Clear();
 
             // Loads the ship parts such as Gyroscopes, Thrusters, etc, along with any settings
             this.GridTerminalSystem.GetBlocksOfType(this.shipGyroscopes);
             this.GridTerminalSystem.GetBlocksOfType(this.shipThrusters);
 
             // Finds the Main Cockpit
-            List<IMyCockpit> availableCockpits = new List<IMyCockpit>();
-            this.GridTerminalSystem.GetBlocksOfType(availableCockpits);
-            foreach (IMyCockpit cockpit in availableCockpits) {
-                if (cockpit.IsMainCockpit) {
-                    this.shipMainCockpit = cockpit;
-                }
-            }
+            List<IMyCockpit> shipControllers = new List<IMyCockpit>();
+            this.GridTerminalSystem.GetBlocksOfType(shipControllers);
+            this.shipCockpit = shipControllers.First();
 
-            // Warns if no Main Cockpit is set then extract the WorldMatrix of what we'll consider the orientation referece
             MatrixD currentOrientation;
-            if (null == this.shipMainCockpit) {
-                Echo("Warning: No Main Cockpit set! Using orientations from Programmable Block.");
-                currentOrientation = this.Me.WorldMatrix;
-            } else {
-                currentOrientation = this.shipMainCockpit.WorldMatrix;
-            }
+            currentOrientation = this.shipCockpit.WorldMatrix;
 
             // Calculates the Forward, Right and Up main vectors to be able to calculate local rotation later
             this.shipMainOrientationForward = Vector3D.TransformNormal(Vector3D.Forward, currentOrientation);
@@ -138,19 +206,25 @@ namespace IngameScript
             this.shipMainOrientationUp = Vector3D.TransformNormal(Vector3D.Up, currentOrientation);
 
             // Finds the proper rotation of Gyroscopes
-            foreach (IMyGyro gyro in this.shipGyroscopes) {
+            foreach (IMyGyro gyro in this.shipGyroscopes)
                 this.shipGyroscopesTransforms.Add(gyro.EntityId, this.GetLocalRotation(gyro.WorldMatrix));
-            }
+
+            // Lift thrusters
+            foreach (IMyThrust thruster in shipThrusters)
+                if (thruster.Orientation.Forward == Base6Directions.GetFlippedDirection(this.shipCockpit.Orientation.Up))
+                    this.shipLiftThrusters.Add(thruster);
 
             // Loads options from the Custom Data field
             string controller = "";
             string[] commands = this.Me.CustomData.Split('\n');
-            foreach (string command in commands) {
+            foreach (string command in commands)
+            {
                 // Clear any spaces around the line
                 string line = command.Trim();
 
                 // Only processes non-empty lines
-                if (line.Length > 0) {
+                if (line.Length > 0)
+                {
                     // Separates the parts of that line
                     char operation = line[0];
                     string[] parts = line.Substring(1).Trim().Split('=');
@@ -160,7 +234,8 @@ namespace IngameScript
                             .ToArray();
 
                     // Only processes on valid operations
-                    switch (operation) {
+                    switch (operation)
+                    {
                         // Defines current controller
                         case '!':
                             controller = variable;
@@ -183,45 +258,70 @@ namespace IngameScript
                             string commandKey = this.GetCommandKey(controller, variable);
                             if (this.shipCommands.ContainsKey(commandKey))
                                 throw new Exception($"Command already set for axis '{ variable }' on controller '{ controller }'");
+
                             this.shipCommands.Add(commandKey, this.availableCommands[cmd]);
                             this.shipCommandsOptions.Add(commandKey, args);
                             break;
                     }
                 }
             }
+
+            Echo("Setup complete.");
         }
 
-        public Program ()
+        public Program()
         {
             // This makes sure our script will only ever fire on actual controller input
-            Runtime.UpdateFrequency = UpdateFrequency.None;
+            Runtime.UpdateFrequency = UpdateFrequency.Update100 | UpdateFrequency.Update1;
 
             // Links command names to their respective Actions
             this.availableCommands.Add("ThrustForward", this.MakeSetThrust(Vector3I.Forward));
             this.availableCommands.Add("ThrustBackward", this.MakeSetThrust(Vector3I.Backward));
             this.availableCommands.Add("ThrustLateral", this.MakeSetThrustCentered(Vector3I.Left, Vector3I.Right));
             this.availableCommands.Add("ThrustVertical", this.MakeSetThrustCentered(Vector3I.Down, Vector3I.Up));
-            this.availableCommands.Add("Pitch", this.MakeSetGyros(Vector3I.Right));
-            this.availableCommands.Add("Roll", this.MakeSetGyros(Vector3I.Forward));
-            this.availableCommands.Add("Yaw", this.MakeSetGyros(Vector3I.Up));
+            this.availableCommands.Add("ThrustHorizontal", this.MakeSetThrustCentered(Vector3I.Forward, Vector3I.Backward));
+            this.availableCommands.Add("Pitch", this.MakeSetGyros(Vector3I.Left));
+            this.availableCommands.Add("Roll", this.MakeSetGyros(Vector3I.Backward));
+            this.availableCommands.Add("Yaw", this.MakeSetGyros(Vector3I.Down));
             this.availableCommands.Add("GyroPower", this.MakeSetGyroPower());
 
             // Setup
             this.Reload();
         }
 
-        public void Main (string argument, UpdateType updateSource)
+        public void Main(string argument, UpdateType updateType)
         {
+            // Update thrust and mass values every 100 ticks
+            if ((updateType & UpdateType.Update100) != 0)
+                this.UpdateThrustMass();
+
             // Makes sure we're dealing with an actual input
-            if (UpdateType.Mod == updateSource && argument.Length > 0) {
+            if (argument.Length > 0)
+            {
                 // Tries parsing it
                 ControllerInputCollection inputs = ControllerInputCollection.FromString(argument);
 
                 // Does actions on it
-                foreach (ControllerInput input in inputs) {
+                foreach (ControllerInput input in inputs)
+                {
                     // Invokes command for that input
                     this.InvokeCommandFromInput(input);
                 }
+            }
+            else
+            {
+                Echo("input event not triggered");
+            }
+
+            if (this.DEBUG)
+            {
+                // Print thrust and mass stats
+                Echo($"Gravity: {this.gravity}m/s/s");
+                Echo($"available lift: {(this.availableLiftThrust / 1000.0):F2}kN");
+                Echo($"baseline lift: {(this.baselineLiftThrust / 1000.0):F2}kN");
+                Echo($"baseline delta: {this.baselineDelta * 100}%");
+                Echo($"current mass: {this.currentShipMass}Kg");
+                Echo($"max mass: {this.maxShipMass}Kg");
             }
         }
 
@@ -230,20 +330,31 @@ namespace IngameScript
         /// </summary>
         /// <param name="direction">The direction of desired thrust</param>
         /// <returns>Action that sets the Thrust Override on the ship</returns>
-        public Action<ControllerInput, string[]> MakeSetThrust (Vector3I direction)
+        public Action<ControllerInput, string[]> MakeSetThrust(Vector3I direction)
         {
             // For some reason we need to invert this so that Forward means thrust Forward
             Vector3I gridThrustDirection = -direction;
 
-            return (ControllerInput input, string[] args) => {
-                foreach (IMyThrust thruster in this.shipThrusters) {
+            // All thrusters that push in the desired direction
+            List<IMyThrust> directionalThrusters = this.shipThrusters.FindAll((t) => t.GridThrustDirection == gridThrustDirection);
+
+            // Mark lift function
+            bool isLift = gridThrustDirection == Vector3I.Up;
+
+            return (ControllerInput input, string[] args) =>
+            {
+                float inputValue;
+                float thrustOverride;
+
+                foreach (IMyThrust thruster in directionalThrusters)
+                {
                     // Skips inactive thrusters
-                    if (!thruster.Enabled)
+                    if (!thruster.IsWorking)
                         continue;
 
-                    // If the direction matches, set thrust
-                    if (thruster.GridThrustDirection == gridThrustDirection)
-                        thruster.ThrustOverridePercentage = Math.Max(0, this.GetAxisValueByZero(input.AnalogValue, this.GetArg(args, 1, "Normal", this.AXIS_TYPES)));
+                    inputValue = this.GetAxisValueByZero(input.AnalogValue, this.GetArg(args, 1, "Normal", this.AXIS_TYPES));
+                    thrustOverride = this.PlotOnExpCurve(inputValue, 0, 1, INPUT_EXP_THRUST);
+                    thruster.ThrustOverridePercentage = Math.Max(0, thrustOverride);
                 }
             };
         }
@@ -253,21 +364,30 @@ namespace IngameScript
         /// </summary>
         /// <param name="direction">The direction of desired thrust</param>
         /// <returns>Action that sets the Thrust Override on the ship</returns>
-        public Action<ControllerInput, string[]> MakeSetThrustCentered (Vector3I directionNegative, Vector3I directionPositive)
+        // TODO: Account for baseline lift thrust
+        public Action<ControllerInput, string[]> MakeSetThrustCentered(Vector3I directionNegative, Vector3I directionPositive)
         {
             // For some reason we need to invert this so that Forward means thrust Forward
             Vector3I gridThrustDirectionNegative = -directionNegative;
             Vector3I gridThrustDirectionPositive = -directionPositive;
+            bool isLift = directionNegative == Vector3I.Up || directionPositive == Vector3I.Up;
 
-            return (ControllerInput input, string[] args) => {
+            return (ControllerInput input, string[] args) =>
+            {
                 // Gets the directional input (corrects when on reverse axis, etc)
                 float inputDirectional = this.GetAxisValueByZero(input.AnalogValue, this.GetArg(args, 1, "Normal", AXIS_DIRECTIONS));
+                Echo($"Axis: {input.Axis}");
 
                 // Gets the centered value of that directional input
                 float value = this.GetAxisValueByZero(inputDirectional, "Center");
+                bool isZeroInput = Math.Abs(value) < this.DEAD_ZONE;
 
-                // Finally, gets the actual percentage to send to thrusters
-                float thrust = Math.Abs(value);
+                // Plot input on a simple curve
+                value = this.PlotOnExpCurve(value, 0, 1, INPUT_EXP_THRUST);
+
+                // Account for gravity when lifting
+                if (isLift)
+                    value += this.baselineDelta;
 
                 // Determines the correct direction
                 Vector3I direction = Vector3I.Zero;
@@ -276,18 +396,22 @@ namespace IngameScript
                 if (value > 0)
                     direction = gridThrustDirectionPositive;
 
-                foreach (IMyThrust thruster in this.shipThrusters) {
+                foreach (IMyThrust thruster in this.shipThrusters)
+                {
                     // Handles cases of zero thrust = zero everything
-                    if (thrust < this.DELTA_MIN && (thruster.GridThrustDirection == direction || thruster.GridThrustDirection == direction)) {
-                        thruster.ThrustOverridePercentage = 0.0f;
-                    } else {
+                    if (isZeroInput && 
+                         (thruster.GridThrustDirection == direction || thruster.GridThrustDirection == -direction))
+                        thruster.ThrustOverridePercentage = 0f;
+
+                    else
+                    {
                         // Applies thrust to desired direction
                         if (thruster.GridThrustDirection == direction)
-                            thruster.ThrustOverridePercentage = thrust;
+                            thruster.ThrustOverridePercentage = Math.Abs(value);
 
                         // Remove thrust from reverse direction
                         if (thruster.GridThrustDirection == -direction)
-                            thruster.ThrustOverridePercentage = 0.0f;
+                            thruster.ThrustOverridePercentage = 0f;
                     }
                 }
             };
@@ -298,27 +422,36 @@ namespace IngameScript
         /// </summary>
         /// <param name="direction">The direction of desired thrust</param>
         /// <returns>Action that sets the Gyroscope Override on the ship</returns>
-        public Action<ControllerInput, string[]> MakeSetGyros (Vector3I axis)
+        public Action<ControllerInput, string[]> MakeSetGyros(Vector3I axisNegative)
         {
-            return (ControllerInput input, string[] args) => {
+            Vector3I axis = -axisNegative;
+
+            return (ControllerInput input, string[] args) =>
+            {
                 // Gets the directional input (corrects when on reverse axis, etc)
                 float inputDirectional = this.GetAxisValueByZero(input.AnalogValue, this.GetArg(args, 1, "Normal", AXIS_DIRECTIONS));
+                Echo($"Axi: {input.Axis}");
 
                 // Centers value first
                 float value = 6 * this.GetAxisValueByZero(inputDirectional, "Center");
 
                 // Small values correct to zero!
-                if (Math.Abs(value) < this.DELTA_MIN)
+                if (Math.Abs(value) < this.DEAD_ZONE)
                     value = 0;
+
+                // Plot input on a simple curve
+                value = this.PlotOnExpCurve(value, 0, 6, INPUT_EXP_GYRO);
 
                 // Now pass it down to the gyroscopes
                 // TODO: Find out which gyro should be activated accordingly to their orientation
-                foreach (IMyGyro gyro in this.shipGyroscopes) {
+                foreach (IMyGyro gyro in this.shipGyroscopes)
+                {
                     // Gets the Gyro transform data
                     Vector3I[] gyroTransforms = this.shipGyroscopesTransforms[gyro.EntityId];
 
                     // We need to enable Gyro Override first to set these values, but only do that if we have any input
-                    if (Math.Abs(value) > 0) {
+                    if (Math.Abs(value) > 0)
+                    {
                         gyro.GyroOverride = true;
                     }
 
@@ -349,7 +482,8 @@ namespace IngameScript
                         gyro.Yaw = value * rYaw;
 
                     // Determines state of Gyro Override
-                    if (gyro.Pitch + gyro.Roll + gyro.Yaw == 0) {
+                    if (gyro.Pitch + gyro.Roll + gyro.Yaw == 0)
+                    {
                         gyro.GyroOverride = false;
                     }
                 }
@@ -360,15 +494,21 @@ namespace IngameScript
         /// Generates a function to set Gyroscope power around an axis
         /// </summary>
         /// <returns>Action that sets the Gyroscope Power on the ship</returns>
-        public Action<ControllerInput, string[]> MakeSetGyroPower ()
+        public Action<ControllerInput, string[]> MakeSetGyroPower()
         {
-            return (ControllerInput input, string[] args) => {
+            return (ControllerInput input, string[] args) =>
+            {
+                Echo($"Axi: {input.Axis}");
                 // Gets the directional input (corrects when on reverse axis, etc)
                 float inputDirectional = this.GetAxisValueByZero(input.AnalogValue, this.GetArg(args, 1, "Normal", AXIS_DIRECTIONS));
 
+                // Plot input on a simple curve
+                float value = this.PlotOnExpCurve(inputDirectional, 0, 1, INPUT_EXP_FLAT);
+
                 // Sets gyro power
-                foreach (IMyGyro gyro in this.shipGyroscopes) {
-                    gyro.GyroPower = inputDirectional;
+                foreach (IMyGyro gyro in this.shipGyroscopes)
+                {
+                    gyro.GyroPower = value;
                 }
             };
         }
