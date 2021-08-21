@@ -24,8 +24,8 @@ namespace WolfeLabs.AnalogThrottle
         // Our current Player
         private IMyPlayer currentPlayer = null;
 
-        // Our current Cockpit
-        private IMyCockpit currentControlUnit = null;
+        // Our current ship controller (cockpit/RC)
+        private IMyShipController currentControlUnit = null;
 
         // Our current Grid
         private IMyCubeGrid currentGrid = null;
@@ -109,7 +109,7 @@ namespace WolfeLabs.AnalogThrottle
         private void UpdateCurrentControlUnit (IMyControllableEntity oldUnit, IMyControllableEntity newUnit)
         {
             // Tries to convert the new Control Unit into a Cockpit, becomes null otherwise
-            this.currentControlUnit = newUnit as IMyCockpit;
+            this.currentControlUnit = newUnit as IMyShipController;
 
             DebugHelper.Log("Convert Check");
             // If a Cockpit and a grid are detected, extract grid information
@@ -125,7 +125,7 @@ namespace WolfeLabs.AnalogThrottle
                 DebugHelper.Log("UpdateBlocks");
                 this.UpdateCurrentGridBlocks(null);
 
-                DebugHelper.Log($"Cockpit found: { this.currentControlUnit.CustomName }");
+                DebugHelper.Log($"Ship controller found: { this.currentControlUnit.CustomName }");
                 DebugHelper.Log($"Grid found: { this.currentControlUnit.CubeGrid.CustomName }");
                 return;
             }
