@@ -296,7 +296,7 @@ namespace IngameScript
                 this.UpdateThrustMass();
 
             // Makes sure we're dealing with an actual input
-            if (argument.Length > 0)
+            if ((updateType & UpdateType.Mod) !=0 && argument.Length > 0)
             {
                 // Tries parsing it
                 ControllerInputCollection inputs = ControllerInputCollection.FromString(argument);
