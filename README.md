@@ -34,3 +34,7 @@ After new controller data is fetched, it is compared with the previous state and
 To keep things as compatible and in sync as possible between the Plugin and Scripts, both use the same Scripting API. That API contains any shared classes along with methods to serialize and deserialize data.
 
 The shared API is present on the [AnalogThrottleScriptingAPI](AnalogThrottleScriptingAPI/) directory of this project, along with instructions on how to use it on your scripts.
+
+## Sample Scripts
+
+A repository containing some sample Scripts to be used with this plugin is available [here](https://github.com/wolfe-labs/SE-AnalogThrottleScripts). It used to be bundled with the Plugin but was removed so that only plugin-related stuff is included here.
